@@ -181,3 +181,33 @@ func (me *application) UpdatePost(id int, p Post) (*Post, error) {
 
 	return &p, nil
 }
+
+func (me *application) SearchPostFullText(query string) ([]Post, error) {
+	sqlQuery := `
+		SELECT id, title, content, tags, created_at
+		FROM posts
+		WHERE search_vector @@ plainto_tsquery('english', $1)
+		ORDER BY ts_rank(search_vector, plainto_tsquery('english', $1)) DESC
+	`
+
+	rows, err := me.db.Query(sqlQuery, query)
+	if err != nil {
+		return nil, fmt.Errorf("error executing full-text search: %w", err)
+	}
+	defer rows.Close()
+
+	var posts []Post
+	for rows.Next() {
+		var post Post
+		if err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.Tags, &post.CreatedAt); err != nil {
+			return nil, fmt.Errorf("error scanning search result: %w", err)
+		}
+		posts = append(posts, post)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating search results: %w", err)
+	}
+
+	return posts, nil
+}

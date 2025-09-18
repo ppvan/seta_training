@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.24-alpine
+FROM golang:1.24.6-alpine
 
 # Set environment variables
 ENV GO111MODULE=on \
@@ -18,13 +18,13 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source code
-COPY ./cmd/api ./cmd/api
+COPY ./cmd/ ./cmd/
 
 # Build the binary
-RUN go build -o /teams-api ./cmd/api
+RUN go build -o blog_api ./cmd/api
 
 # Expose port
 EXPOSE 8080
 
 # Run binary
-CMD ["/teams-api"]
+CMD ["/app/blog_api"]

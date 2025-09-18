@@ -143,3 +143,24 @@ func (me *application) createPostHandler(w http.ResponseWriter, r *http.Request)
 		me.serverErrorResponse(w, r, err)
 	}
 }
+
+func (me *application) searchFullTextHandler(w http.ResponseWriter, r *http.Request) {
+	queryValues := r.URL.Query()
+	query := queryValues.Get("q")
+	if query == "" {
+		me.badRequestResponse(w, r, errors.New("query params is required"))
+		return
+	}
+
+	posts, err := me.SearchPostFullText(query)
+	if err != nil {
+		me.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = me.writeJSON(w, http.StatusOK, envelope{"posts": posts}, nil)
+	if err != nil {
+		me.serverErrorResponse(w, r, err)
+		return
+	}
+}
