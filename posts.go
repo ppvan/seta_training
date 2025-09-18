@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql/driver"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -18,6 +17,13 @@ type Post struct {
 	Content   string    `json:"content" db:"content"`
 	Tags      Tags      `json:"tags" db:"tags"` // Custom type for TEXT[]
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+type ActivityLog struct {
+	ID       int       `json:"id" db:"id"`
+	Action   string    `json:"action" db:"action"`
+	PostID   int       `json:"post_id" db:"post_id"`
+	LoggedAt time.Time `json:"logged_at" db:"logged_at"`
 }
 
 func (t *Tags) Scan(value interface{}) error {
@@ -49,45 +55,66 @@ func (t Tags) String() string {
 	return fmt.Sprintf("[%s]", strings.Join([]string(t), ", "))
 }
 
-func (app *application) createPostHandler(w http.ResponseWriter, r *http.Request) {
-	// Declare an anonymous struct to hold the information that we expect to be in the HTTP
-	// request body (not that the field names and types in the struct are a subset of the Movie
-	// struct). This struct will be our *target decode destination*.
-	var input struct {
-		Title   string   `json:"title"`
-		Content string   `json:"content"`
-		Tags    []string `json:"tags"`
-	}
-
-	// Use the readJSON() helper to decode the request body into the struct.
-	// If this returns an error we send the client the error message along with
-	// a 400 Bad Request status code.
-	err := app.readJSON(w, r, &input)
+func (me *application) InsertPost(p *Post) (*Post, error) {
+	tx, err := me.db.Begin()
 	if err != nil {
-		app.badRequestResponse(w, r, err)
-		return
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	post := Post{
-		Title:   input.Title,
-		Content: input.Content,
-		Tags:    input.Tags,
-	}
-
-	query := `
-	INSERT INTO posts(title, content, tags)
-	VALUES ($1, $2, $3)
-	RETURNING id, created_at
+	// Insert post
+	postQuery := `
+		INSERT INTO posts(title, content, tags)
+		VALUES ($1, $2, $3)
+		RETURNING id, created_at
 	`
-
-	err = app.db.QueryRow(query, post.Title, post.Content, post.Tags).Scan(&post.ID, &post.CreatedAt)
+	err = tx.QueryRow(postQuery, p.Title, p.Content, p.Tags).Scan(&p.ID, &p.CreatedAt)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to insert post: %w", err)
 	}
 
-	err = app.writeJSON(w, http.StatusCreated, envelope{"post": post}, nil)
+	// Insert activity log
+	logQuery := `
+		INSERT INTO activity_logs(action, post_id, logged_at)
+		VALUES ($1, $2, NOW())
+	`
+	_, err = tx.Exec(logQuery, "new_post", p.ID)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to insert activity log: %w", err)
 	}
+
+	// Commit transaction
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return p, nil
+}
+
+func (me *application) FindPostsByTag(tag string) ([]Post, error) {
+	query := `SELECT id, title, content, tags, created_at FROM posts WHERE $1 = ANY(tags)`
+	var posts []Post
+	rows, err := me.db.Query(query, tag)
+	if err != nil {
+		return nil, fmt.Errorf("error finding posts by tag: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var post Post
+		err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.Tags, &post.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning post row: %w", err)
+		}
+		posts = append(posts, post)
+	}
+
+	// Check for iteration errors
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return posts, nil
 }

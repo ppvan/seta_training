@@ -28,6 +28,49 @@ func (me *application) searchByTag(w http.ResponseWriter, r *http.Request) {
 		me.badRequestResponse(w, r, errors.New("tag params is required"))
 	}
 
-	me.db.Exec("")
+	posts, err := me.FindPostsByTag(tag)
+	if err != nil {
+		me.serverErrorResponse(w, r, err)
+		return
+	}
 
+	err = me.writeJSON(w, http.StatusOK, envelope{"posts": posts}, nil)
+	if err != nil {
+		me.serverErrorResponse(w, r, err)
+		return
+	}
+
+}
+
+func (me *application) createPostHandler(w http.ResponseWriter, r *http.Request) {
+
+	var input struct {
+		Title   string   `json:"title"`
+		Content string   `json:"content"`
+		Tags    []string `json:"tags"`
+	}
+
+	err := me.readJSON(w, r, &input)
+	if err != nil {
+		me.badRequestResponse(w, r, err)
+		return
+	}
+
+	post := Post{
+		Title:   input.Title,
+		Content: input.Content,
+		Tags:    input.Tags,
+	}
+
+	dbPost, err := me.InsertPost(&post)
+
+	if err != nil {
+		me.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = me.writeJSON(w, http.StatusCreated, envelope{"post": dbPost}, nil)
+	if err != nil {
+		me.serverErrorResponse(w, r, err)
+	}
 }

@@ -7,8 +7,6 @@ CREATE TABLE IF NOT EXISTS posts (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create GIN index on tags array for optimized tag searches (idempotent)
-CREATE INDEX IF NOT EXISTS idx_posts_tags_gin ON posts USING GIN (tags);
 
 -- Example usage queries:
 -- Find posts containing a specific tag
