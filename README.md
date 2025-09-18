@@ -8,7 +8,6 @@ This repository contains the source code for the SETA Golang/Node.js training pr
 - `docker-compose.yml` for running the system
 - This `README.md` explaining setup and API usage
 
----
 
 ## Prerequisites
 
@@ -16,7 +15,6 @@ This repository contains the source code for the SETA Golang/Node.js training pr
 - [Docker Compose](https://docs.docker.com/compose/install/)
 - (Optional) PostgreSQL and Redis if you want to run the backend without Docker
 
----
 
 ## Quick Start
 
@@ -37,7 +35,6 @@ This will build and launch all services defined in `docker-compose.yml`.
 
 By default, the API service runs on port `8000`.
 
----
 
 ## API Endpoints
 
@@ -79,22 +76,3 @@ Example (replace `{id}` with an actual post ID, e.g., `1`):
 curl http://localhost:8000/v1/posts/1
 ```
 
----
-
-## Notes
-
-- If you need to change ports or service settings, edit `docker-compose.yml`.
-- For troubleshooting, check logs in your terminal or use `docker-compose logs`.
-- The backend requires a PostgreSQL and Redis instance as defined. Adjust credentials in your `.env` or `docker-compose.yml` if needed.
-
----
-
-## Contributing
-
-Contributions are welcome! Please fork the repo and submit a pull request.
-
----
-
-## License
-
-See `LICENSE` file for details.
