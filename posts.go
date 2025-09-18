@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -32,13 +34,11 @@ func (t *Tags) Scan(value interface{}) error {
 		*t = Tags{}
 		return nil
 	}
-
 	// Use pq.Array for PostgreSQL array handling
 	var tags pq.StringArray
 	if err := tags.Scan(value); err != nil {
 		return err
 	}
-
 	*t = Tags(tags)
 	return nil
 }
@@ -64,10 +64,10 @@ func (me *application) InsertPost(p *Post) (*Post, error) {
 
 	// Insert post
 	postQuery := `
-		INSERT INTO posts(title, content, tags)
-		VALUES ($1, $2, $3)
-		RETURNING id, created_at
-	`
+        INSERT INTO posts(title, content, tags)
+        VALUES ($1, $2, $3)
+        RETURNING id, created_at
+    `
 	err = tx.QueryRow(postQuery, p.Title, p.Content, p.Tags).Scan(&p.ID, &p.CreatedAt)
 	if err != nil {
 		tx.Rollback()
@@ -76,9 +76,9 @@ func (me *application) InsertPost(p *Post) (*Post, error) {
 
 	// Insert activity log
 	logQuery := `
-		INSERT INTO activity_logs(action, post_id, logged_at)
-		VALUES ($1, $2, NOW())
-	`
+        INSERT INTO activity_logs(action, post_id, logged_at)
+        VALUES ($1, $2, NOW())
+    `
 	_, err = tx.Exec(logQuery, "new_post", p.ID)
 	if err != nil {
 		tx.Rollback()
@@ -122,11 +122,25 @@ func (me *application) FindPostsByTag(tag string) ([]Post, error) {
 
 var ErrNotFound = fmt.Errorf("resource not found")
 
-func (me *application) GetPost(id int) (*Post, error) {
-	query := `SELECT id, title, content, tags, created_at FROM posts WHERE id = $1`
+func (me *application) GetAndCachePost(id int) (*Post, error) {
+	// Cache check using cache aside, TTL 5 mins
+	cacheKey := fmt.Sprintf("post:%d", id)
+	ctx := context.Background()
 
+	cached, err := me.rdb.Get(ctx, cacheKey).Result()
+	if err == nil {
+		var post Post
+		if err := json.Unmarshal([]byte(cached), &post); err != nil {
+			fmt.Printf("Cache unmarshal error: %v\n", err)
+		} else {
+			return &post, nil
+		}
+	}
+
+	// Cache miss or error - get from database
+	query := `SELECT id, title, content, tags, created_at FROM posts WHERE id = $1`
 	var post Post
-	err := me.db.QueryRow(query, id).Scan(&post.ID, &post.Title, &post.Content, &post.Tags, &post.CreatedAt)
+	err = me.db.QueryRow(query, id).Scan(&post.ID, &post.Title, &post.Content, &post.Tags, &post.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrNotFound
@@ -134,5 +148,36 @@ func (me *application) GetPost(id int) (*Post, error) {
 		return nil, fmt.Errorf("error retrieving post: %w", err)
 	}
 
+	// Store in cache for next time (5 minute TTL)
+	postJSON, err := json.Marshal(post)
+	if err != nil {
+		// Log marshal error but still return the post
+		fmt.Printf("Cache marshal error: %v\n", err)
+	} else {
+		err = me.rdb.Set(ctx, cacheKey, postJSON, 5*time.Minute).Err()
+		if err != nil {
+			// Log cache set error but still return the post
+			fmt.Printf("Cache set error: %v\n", err)
+		}
+	}
+
 	return &post, nil
+}
+
+func (me *application) UpdatePost(id int, p Post) (*Post, error) {
+	postQuery := `
+        UPDATE posts
+        SET title = $1, content = $2, tags = $3
+        RETURNING id, title, content, tags, created_at
+    `
+	err := me.db.QueryRow(postQuery, p.Title, p.Content, p.Tags).Scan(&p.ID, &p.Title, &p.Content, &p.Tags, &p.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Clear cache
+	cacheKey := fmt.Sprintf("post:%d", id)
+	me.rdb.Del(context.Background(), cacheKey)
+
+	return &p, nil
 }

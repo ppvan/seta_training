@@ -26,6 +26,7 @@ func (me *application) searchByTagHandler(w http.ResponseWriter, r *http.Request
 	tag := queryValues.Get("tag")
 	if tag == "" {
 		me.badRequestResponse(w, r, errors.New("tag params is required"))
+		return
 	}
 
 	posts, err := me.FindPostsByTag(tag)
@@ -49,7 +50,7 @@ func (me *application) getPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	post, err := me.GetPost(int(id))
+	post, err := me.GetAndCachePost(int(id))
 
 	if errors.Is(ErrNotFound, err) {
 		me.notFoundResponse(w, r)
@@ -58,6 +59,49 @@ func (me *application) getPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = me.writeJSON(w, http.StatusOK, envelope{
 		"post": post,
+	}, nil)
+
+	if err != nil {
+		me.serverErrorResponse(w, r, err)
+		return
+	}
+
+}
+
+func (me *application) updatePostHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := me.readIDParam(r)
+	if err != nil {
+		me.badRequestResponse(w, r, err)
+		return
+	}
+
+	var input struct {
+		Title   string   `json:"title"`
+		Content string   `json:"content"`
+		Tags    []string `json:"tags"`
+	}
+
+	err = me.readJSON(w, r, &input)
+	if err != nil {
+		me.badRequestResponse(w, r, err)
+		return
+	}
+
+	post := Post{
+		Title:   input.Title,
+		Content: input.Content,
+		Tags:    input.Tags,
+	}
+
+	dbPost, err := me.UpdatePost(int(id), post)
+
+	if err != nil {
+		me.notFoundResponse(w, r)
+		return
+	}
+
+	err = me.writeJSON(w, http.StatusOK, envelope{
+		"post": dbPost,
 	}, nil)
 
 	if err != nil {
