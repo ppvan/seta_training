@@ -10,11 +10,13 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 )
 
 type application struct {
 	logger *log.Logger
 	db     *sql.DB
+	rdb    *redis.Client
 }
 
 func main() {
@@ -26,9 +28,16 @@ func main() {
 		logger.Fatal("Failed to connect to Database", err)
 	}
 
+	dsn = "localhost:6379"
+	rdb, err := openRedis(dsn)
+	if err != nil {
+		logger.Fatal("Failed to connect to redis", err)
+	}
+
 	me := application{
 		logger: logger,
 		db:     DB,
+		rdb:    rdb,
 	}
 
 	me.serve()
@@ -75,4 +84,17 @@ func openDB(dsn string) (*sql.DB, error) {
 
 	// Return the sql.DB connection pool.
 	return db, nil
+}
+
+func openRedis(dsn string) (*redis.Client, error) {
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+
+	cmd := rdb.Ping(context.Background())
+
+	return rdb, cmd.Err()
 }

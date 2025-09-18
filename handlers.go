@@ -21,7 +21,7 @@ func (me *application) healthcheckHandler(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (me *application) searchByTag(w http.ResponseWriter, r *http.Request) {
+func (me *application) searchByTagHandler(w http.ResponseWriter, r *http.Request) {
 	queryValues := r.URL.Query()
 	tag := queryValues.Get("tag")
 	if tag == "" {
@@ -35,6 +35,31 @@ func (me *application) searchByTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = me.writeJSON(w, http.StatusOK, envelope{"posts": posts}, nil)
+	if err != nil {
+		me.serverErrorResponse(w, r, err)
+		return
+	}
+
+}
+
+func (me *application) getPostHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := me.readIDParam(r)
+	if err != nil {
+		me.badRequestResponse(w, r, err)
+		return
+	}
+
+	post, err := me.GetPost(int(id))
+
+	if errors.Is(ErrNotFound, err) {
+		me.notFoundResponse(w, r)
+		return
+	}
+
+	err = me.writeJSON(w, http.StatusOK, envelope{
+		"post": post,
+	}, nil)
+
 	if err != nil {
 		me.serverErrorResponse(w, r, err)
 		return

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"fmt"
 	"strings"
@@ -117,4 +118,21 @@ func (me *application) FindPostsByTag(tag string) ([]Post, error) {
 	}
 
 	return posts, nil
+}
+
+var ErrNotFound = fmt.Errorf("resource not found")
+
+func (me *application) GetPost(id int) (*Post, error) {
+	query := `SELECT id, title, content, tags, created_at FROM posts WHERE id = $1`
+
+	var post Post
+	err := me.db.QueryRow(query, id).Scan(&post.ID, &post.Title, &post.Content, &post.Tags, &post.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("error retrieving post: %w", err)
+	}
+
+	return &post, nil
 }
