@@ -1,13 +1,10 @@
 # SETA Training Project
 
-This repository contains the source code for the SETA Golang/Node.js training project.
-
 ## Contents
 
 - Source code (Go)
 - `docker-compose.yml` for running the system
 - This `README.md` explaining setup and API usage
-
 
 ## Prerequisites
 
@@ -58,12 +55,14 @@ curl -X POST http://localhost:8000/v1/posts \
   -d '{"title":"Hello World","content":"My first post","tags":["training","golang"]}'
 ```
 
-### 3. Search Posts by Tag
+### 3. Update a Post
 
-**GET** `/v1/posts/search-by-tag?tag=training`
+**PUT** `/v1/posts/{id}`
 
 ```bash
-curl "http://localhost:8000/v1/posts/search-by-tag?tag=training"
+curl -X PUT http://localhost:8000/v1/posts/1 \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Updated Title","content":"Updated content","tags":["updated","golang"]}'
 ```
 
 ### 4. Get a Post by ID
@@ -76,3 +75,25 @@ Example (replace `{id}` with an actual post ID, e.g., `1`):
 curl http://localhost:8000/v1/posts/1
 ```
 
+### 5. Search Posts by Tag
+
+**GET** `/v1/search/tags?tag=training`
+
+```bash
+curl "http://localhost:8000/v1/search/tags?tag=training"
+```
+
+### 6. Full-Text Search Posts
+
+**GET** `/v1/search?q=keyword`
+
+```bash
+curl "http://localhost:8000/v1/search?q=golang"
+```
+
+
+## Notes
+
+- If you need to change ports or service settings, edit `docker-compose.yml`.
+- For troubleshooting, check logs in your terminal or use `docker-compose logs`.
+- The backend requires PostgreSQL and Redis as defined. Adjust credentials in your environment or `docker-compose.yml` if needed.
